@@ -1,0 +1,49 @@
+model {
+
+  /* indexing is complicated for nouns
+  part1: only the child produce the noun in the sample (very few cases!)
+  part2: child and caregiver both produce the noun
+  part3: only the caregiver produces the noun
+  part4: caregivers don't produce the noun in this sample, but imputing a count */
+  
+  /* prior over mean and proportion for beta (determines cross-noun distribution of determiner preference) */
+  mu0.adult ~ dbeta(1,1)
+  nu.adult ~ dgamma(1,0.0005) /* \lambda is rate parameter, we want a LOW rate for a vague prior */
+  a.adult <- mu0.adult*nu.adult
+  b.adult <- (1-mu0.adult)*nu.adult
+
+  mu0.child ~ dbeta(1,1)
+  nu.child ~ dgamma(1,0.0005) /* \lambda is rate parameter, we want a LOW rate for a vague prior */
+  a.child <- mu0.child*nu.child
+  b.child <- (1-mu0.child)*nu.child
+
+
+  /* observed child data */
+  /* qq is all of the nouns in the imputation inventory for the adult */
+  for(i in (endPart1+1):endPart3) {
+    r.parent[i] ~ dbetabin(a.adult,b.adult,n.parent[i])
+  }
+
+  /* Imputation step: externally set a total number Q of det+n utterances experienced by the child in its lifetime, and a word-frequency distribution wordfreqs */  
+  for(i in 1:endPart4) {
+    R.parent[i] ~ dbetabin(a.adult + r.parent[i],b.adult + n.parent[i] - r.parent[i],N.parent[i]) /* N.parent is the number to be imputed  */
+  }
+
+
+  /* downweighting factor on observed utterances (memory limitations of child & such).  Set to 1 for perfect memory */
+  eta ~ dunif(0,1)
+
+  /* observed child data */
+  /* q is all of the nouns used by the child in that particular window */
+  for(i in 1:endPart2) {
+    /* compute some sufficient statistics */
+    pseudo.r[i] <- eta * (r.parent[i] + R.parent[i])
+    pseudo.f[i] <- eta * (n.parent[i] - r.parent[i] + N.parent[i] - R.parent[i])
+
+    /* infer values of mu and nu from observed child production data */
+    r.child[i] ~ dbetabin(a.child+pseudo.r[i],b.child+pseudo.f[i],n.child[i]) 
+    
+    /* simulated child production data: encounter length(N.new) noun types with n.child[i] observations each */
+    r.child.simulated[i] ~ dbetabin(a.child+pseudo.r[i],b.child+pseudo.f[i],n.child[i]) 
+  }
+}

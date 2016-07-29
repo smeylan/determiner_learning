@@ -1,0 +1,93 @@
+model {
+
+  /* indexing is complicated for nouns
+  part1: only the child produce the noun in the sample (very few cases!)
+  part2: child and caregiver both produce the noun
+  part3: only the caregiver produces the noun
+  part4: caregivers don't produce the noun in this sample, but imputing a count */
+
+  /* in the case of the split-half model, two phases are labeled */
+
+  /* prior over mean and proportion for beta (determines cross-noun distribution of determiner preference) */
+  lambda <- 0.0005 
+  sigma <- 10000 
+
+  /* FIRST PHASE */
+  mu0.adult1 ~ dbeta(1,1)
+  nu.adult1 ~ dgamma(1,lambda) 
+
+  mu0.child1 ~ dbeta(1,1)
+  nu.child1 ~ dgamma(1,lambda) 
+  
+  a.adult1 <- mu0.adult1*nu.adult1
+  b.adult1 <- (1-mu0.adult1)*nu.adult1
+  a.child1 <- mu0.child1*nu.child1
+  b.child1 <- (1-mu0.child1)*nu.child1
+  
+  for(i in (phase1_endPart1+1):phase1_endPart3) {
+    r.parent1[i] ~ dbetabin(a.adult1,b.adult1,n.parent1[i])
+  }
+
+  /* SECOND PHASE */
+  mu0.adult2 ~ dbeta(1,1)
+  nu.adult2 ~ dgamma(1,lambda) 
+  mu0.child2 ~ dbeta(1,1)
+  nu.child2 ~ dgamma(1,lambda)
+  /*
+  nu.change ~ dnorm(0,1/sigma^2)
+  nu.child2 <- ifelse(nu.child1+nu.change < 0, 0, nu.child1+nu.change)
+  */
+
+  a.adult2 <- mu0.adult2*nu.adult2
+  b.adult2 <- (1-mu0.adult2)*nu.adult2
+  a.child2 <- mu0.child2*nu.child2
+  b.child2 <- (1-mu0.child2)*nu.child2
+  for(i in (phase2_endPart1+1):phase2_endPart3) {
+    r.parent2[i] ~ dbetabin(a.adult2,b.adult2,n.parent2[i])
+  }
+  
+  /* Imputation step: externally set a total number Q of det+n utterances experienced by the child in its lifetime, and a word-frequency distribution wordfreqs */
+
+  /* FIRST PHASE */
+  for(i in 1:phase1_endPart4) {
+    R.parent1[i] ~ dbetabin(a.adult1 + r.parent1[i],b.adult1 + n.parent1[i] - r.parent1[i],N.parent1[i]) /* N.parent1 is the number to be imputed  in the first phase*/
+  }
+
+  /* SECOND PHASE */
+  for(i in 1:phase2_endPart4) {
+    R.parent2[i] ~ dbetabin(a.adult2 + r.parent2[i],b.adult2 + n.parent2[i] - r.parent2[i],N.parent2[i]) /* N.parent2 is the number to be imputed in the second phase  */
+  }
+
+  /* downweighting factor on observed utterances (memory limitations of child & such).  Set to 1 for perfect memory */
+  eta1 ~ dunif(0,1)
+  eta2 ~ dunif(0,1)    
+
+  /* OBSERVED CHILD DATA */
+  
+  /* FIRST PHASE */  
+  for(i in 1:phase1_endPart2) {
+    /* pseudocounts */
+    pseudo.r1[i] <- eta1 * (r.parent1[i] + R.parent1[i])
+    pseudo.f1[i] <- eta1 * (n.parent1[i] - r.parent1[i] + N.parent1[i] - R.parent1[i])
+
+    /* infer values of mu and nu from observed child production data */
+    r.child1[i] ~ dbetabin(a.child1+pseudo.r1[i],b.child1+pseudo.f1[i],n.child1[i]) 
+    
+    /* simulated child production data: encounter length(N.new) noun types with n.child[i] observations each */
+    r.child.simulated1[i] ~ dbetabin(a.child1+pseudo.r1[i],b.child1+pseudo.f1[i],n.child1[i]) 
+  }
+
+  /* SECOND PHASE */  
+  for(i in 1:phase2_endPart2) {
+    /* pseudocounts */
+    pseudo.r2[i] <- eta2 * (r.parent2[i] + R.parent2[i])
+    pseudo.f2[i] <- eta2 * (n.parent2[i] - r.parent2[i] + N.parent2[i] - R.parent2[i])
+
+    /* infer values of mu and nu from observed child production data */
+    r.child2[i] ~ dbetabin(a.child2+pseudo.r2[i],b.child2+pseudo.f2[i],n.child2[i]) 
+    
+    /* simulated child production data: encounter length(N.new) noun types with n.child[i] observations each */
+    r.child.simulated2[i] ~ dbetabin(a.child2+pseudo.r2[i],b.child2+pseudo.f2[i],n.child2[i]) 
+    
+  }
+}
