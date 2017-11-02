@@ -1,0 +1,33 @@
+model {
+  /* a simple version of the model in which all data is observed */
+  /* prior over mean and proportion for beta (determines cross-noun distribution of determiner preference) */
+  mu ~ dbeta(1,1)
+  /* nu ~ dgamma(1,0.0005) /* \lambda is rate parameter, we want a LOW rate for a vague prior.  This is what we used for our data analysis in Meylan et al. 2017. */
+  nu ~ dunif(0,10) /* alternatively uniform on [0,10] for pedagogical purposes, and because with small data the probability mass on high values of nu can dominate the mean */
+  a <- mu*nu
+  b <- (1-mu)*nu
+
+
+  /* downweighting factor on observed utterances (memory limitations of child & such).  Set to 1 for perfect memory */
+  eta ~ dunif(0,1)
+
+
+  /* operating on all noun types observed for either adult or child */
+  for(i in 1:length(N.observed[,2])) {
+    /* compute some sufficient statistics */
+    pseudo.r[i] <- eta * r.observed[i,1]
+    pseudo.f[i] <- eta * (N.observed[i,1]-r.observed[i,1])
+
+    /* infer values of mu and nu from observed child production data */
+    mu.this.noun[i] ~ dbeta(a+pseudo.r[i],b+pseudo.f[i])
+    r.observed[i,2] ~ dbin(mu.this.noun[i],N.observed[i,2])
+
+  }
+
+}
+
+
+
+
+
+
